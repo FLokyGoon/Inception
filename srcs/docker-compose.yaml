@@ -1,0 +1,80 @@
+version : "3"
+
+services:
+
+    mariadb:
+        build: $ABSOLUTE_PATH/requirements/mariadb
+        image: inception_mariadb_image
+        container_name: inception_mariadb_container
+        env_file: 
+            - .env
+        networks:
+            - inception
+        volumes:
+            - inception_mariadb_volume:/var/lib/mysql
+        restart: always
+
+    wordpress:
+        build:
+            context: $ABSOLUTE_PATH/requirements/wordpress
+            dockerfile: Dockerfile
+            args:
+                - WP_PHP_USER=$WP_PHP_USER
+                - WP_PHP_GROUP=$WP_PHP_GROUP
+        image: inception_wordpress_image
+        container_name: inception_wordpress_container
+        env_file:
+            - .env
+        networks:
+            - inception
+        volumes:
+            - inception_wordpress_volume:/var/www/html
+        depends_on:
+                - mariadb
+        healthcheck:
+            test: ["CMD-SHELL", "echo 'Wordpress is healthy'"]
+            interval: 20s
+            timeout: 30s
+            retries: 5
+        restart: always
+
+    nginx:
+        ports:
+            - ${NGINX_PORT}:${NGINX_PORT}
+        build: $ABSOLUTE_PATH/requirements/nginx/
+        image: inception_nginx_image
+        container_name: inception_nginx_container
+        networks:
+            - inception
+        env_file:
+            - .env
+        volumes: 
+            - $ABSOLUTE_PATH/requirements/nginx/ssl:/etc/nginx/ssl
+            - inception_wordpress_volume:/var/www/html  
+        depends_on:
+            wordpress:
+                    condition: service_healthy
+        restart: always
+
+networks:
+    inception : 
+        name: inception
+        driver : bridge
+
+volumes:
+    inception_mariadb_volume:
+        driver: local
+        driver_opts:
+            o: bind
+            type: none
+            device: $ABSOLUTE_PATH/requirements/mariadb/data
+        name: inception_mariadb_volume
+
+    inception_wordpress_volume:
+        driver: local
+        driver_opts:
+            o: bind
+            type: none
+            device: $ABSOLUTE_PATH/requirements/wordpress/data
+        name: inception_wordpress_volume
+           
